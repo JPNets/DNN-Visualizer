@@ -31,7 +31,7 @@ class NetworkCanvas(QWidget):
         self.phase = 0.0
         self.rotation_x = -18.0
         self.rotation_y = 35.0
-        self.zoom = 1.0
+        self.zoom = 3.0
         self.dragging = False
         self.last_mouse_pos = None
         self.setMinimumHeight(420)
@@ -61,7 +61,7 @@ class NetworkCanvas(QWidget):
 
     def wheelEvent(self, event) -> None:
         delta = event.angleDelta().y() / 120.0
-        self.zoom = max(0.7, min(1.8, self.zoom + delta * 0.1))
+        self.zoom = max(0.4, min(3.0, self.zoom + delta * 0.15))
         self.update()
 
     def _rotate_point(self, x: float, y: float, z: float) -> tuple[float, float, float]:
@@ -79,7 +79,7 @@ class NetworkCanvas(QWidget):
         x2, y2, z2 = self._rotate_point(x, y, z)
         distance = 10.0
         z2 += distance
-        scale = self.zoom * min(self.width(), self.height()) * 0.08 / max(1.0, z2)
+        scale = self.zoom * min(self.width(), self.height()) * 0.11 / max(1.0, z2)
         return (
             self.width() * 0.5 + x2 * scale,
             self.height() * 0.5 - y2 * scale,
@@ -95,12 +95,19 @@ class NetworkCanvas(QWidget):
             nodes_by_layer: list[list[tuple[float, float, float]]] = []
 
             for layer_index, size in enumerate(self.network.layer_sizes):
-                z = (layer_index - (layer_count - 1) / 2.0) * 3.0
+                layer_x = (layer_index - (layer_count - 1) / 2.0) * 4.0
+                if size <= 1:
+                    rows = cols = 1
+                else:
+                    rows = math.ceil(math.sqrt(size))
+                    cols = math.ceil(size / rows)
                 layer_nodes: list[tuple[float, float, float]] = []
                 for neuron_index in range(size):
-                    x = 0.0
-                    y = (neuron_index - (size - 1) / 2.0) * 1.2
-                    layer_nodes.append((x, y, z))
+                    row = neuron_index // cols
+                    col = neuron_index % cols
+                    y = (row - (rows - 1) / 2.0) * 1.4
+                    z = (col - (cols - 1) / 2.0) * 1.4
+                    layer_nodes.append((layer_x, y, z))
                 nodes_by_layer.append(layer_nodes)
 
             connections: list[tuple[float, tuple[float, float], tuple[float, float], float]] = []
