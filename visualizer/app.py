@@ -129,17 +129,14 @@ class NetworkCanvas(QWidget):
                 painter.drawLine(int(start[0]), int(start[1]), int(end[0]), int(end[1]))
 
             node_positions: list[tuple[float, float, float, float]] = []
-            for layer_index, size in enumerate(self.network.layer_sizes):
-                for neuron_index in range(size):
+            for layer_index, layer_nodes in enumerate(nodes_by_layer):
+                for neuron_index, node_pos in enumerate(layer_nodes):
                     activation_value = 0.0
                     if hasattr(self.network, 'activations_cache') and self.network.activations_cache and layer_index < len(self.network.activations_cache):
                         a = self.network.activations_cache[layer_index]
                         if neuron_index < a.shape[1]:
                             activation_value = float(a[0, neuron_index])
-                    x = 0.0
-                    y = (neuron_index - (size - 1) / 2.0) * 1.2
-                    z = (layer_index - (layer_count - 1) / 2.0) * 3.0
-                    px, py, depth = self._project(x, y, z)
+                    px, py, depth = self._project(*node_pos)
                     node_positions.append((depth, px, py, activation_value))
 
             node_positions.sort(key=lambda item: item[0], reverse=True)
