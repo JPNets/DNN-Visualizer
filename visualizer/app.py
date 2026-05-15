@@ -360,6 +360,34 @@ class NeuralVisualizerWindow(QMainWindow):
         self.dataset_x, self.dataset_y = create_dataset(self.active_dataset)
         self.running = False
         self.learning_rate = 0.08
+        self.lesson_active = False
+        self.lesson_step_index = 0
+        self.lesson_steps = [
+            {
+                'title': 'Input layer',
+                'text': 'The network first looks at the dataset points. Each point is a pair of numbers that describe one example before it enters the model.',
+            },
+            {
+                'title': 'Hidden neurons',
+                'text': 'Hidden neurons combine the inputs using weights and a bias. This is where the network learns to recognize patterns.',
+            },
+            {
+                'title': 'Activation function',
+                'text': 'An activation function decides whether a neuron should pass its signal forward. It helps the network learn non-linear shapes.',
+            },
+            {
+                'title': 'Output prediction',
+                'text': 'The output layer turns the neuron signals into a final guess for the class. Softmax makes the result act like a probability.',
+            },
+            {
+                'title': 'Training and learning',
+                'text': 'Training means the network checks how wrong it is and adjusts weights to make better guesses next time.',
+            },
+            {
+                'title': 'Decision boundary',
+                'text': 'The decision boundary shows how the network separates different classes in the input space. As training improves, the boundary becomes more accurate.',
+            },
+        ]
 
         self.dataset_selector = QComboBox()
         self.dataset_selector.addItems(DATASET_OPTIONS)
@@ -391,6 +419,21 @@ class NeuralVisualizerWindow(QMainWindow):
         self.reset_button = QPushButton('Reset network')
         self.reset_button.clicked.connect(self.on_reset)
         self.reset_button.setToolTip('Reset the network weights and training history to start fresh.')
+
+        self.lesson_button = QPushButton('Start lesson')
+        self.lesson_button.clicked.connect(self.toggle_lesson_mode)
+        self.lesson_button.setToolTip('Start a guided lesson that explains the neural network step by step.')
+        self.prev_step_button = QPushButton('Previous step')
+        self.prev_step_button.clicked.connect(self.prev_lesson_step)
+        self.prev_step_button.setEnabled(False)
+        self.prev_step_button.setToolTip('Go back to the previous lesson step.')
+        self.next_step_button = QPushButton('Next step')
+        self.next_step_button.clicked.connect(self.next_lesson_step)
+        self.next_step_button.setEnabled(False)
+        self.next_step_button.setToolTip('Advance to the next lesson step.')
+        self.lesson_status_label = QLabel('Lesson mode is off.')
+        self.lesson_status_label.setWordWrap(True)
+        self.lesson_status_label.setStyleSheet('color: #b5c5ff;')
 
         self.loss_label = QLabel('Loss: 0.000')
         self.accuracy_label = QLabel('Accuracy: 0.0%')
@@ -454,6 +497,16 @@ class NeuralVisualizerWindow(QMainWindow):
         side_layout.addWidget(self.lr_slider)
         side_layout.addWidget(self.train_button)
         side_layout.addWidget(self.reset_button)
+        side_layout.addWidget(QLabel('Guided lesson'))
+        side_layout.addWidget(self.lesson_button)
+        lesson_control_bar = QWidget()
+        lesson_control_layout = QHBoxLayout(lesson_control_bar)
+        lesson_control_layout.setContentsMargins(0, 0, 0, 0)
+        lesson_control_layout.setSpacing(10)
+        lesson_control_layout.addWidget(self.prev_step_button)
+        lesson_control_layout.addWidget(self.next_step_button)
+        side_layout.addWidget(lesson_control_bar)
+        side_layout.addWidget(self.lesson_status_label)
         side_layout.addSpacing(18)
         self.loss_label.setStyleSheet('color: #b5c5ff;')
         self.accuracy_label.setStyleSheet('color: #b5c5ff;')
@@ -578,7 +631,46 @@ class NeuralVisualizerWindow(QMainWindow):
         self.grad_label.setText(f'Grad norm: {self.network.gradient_norm:.3f}')
         self.update_explanation()
 
+    def toggle_lesson_mode(self) -> None:
+        self.lesson_active = not self.lesson_active
+        if self.lesson_active:
+            self.lesson_button.setText('Stop lesson')
+            self.lesson_step_index = 0
+            self.prev_step_button.setEnabled(False)
+            self.next_step_button.setEnabled(len(self.lesson_steps) > 1)
+            self.lesson_status_label.setText(f'Step 1 of {len(self.lesson_steps)}: {self.lesson_steps[0]["title"]}')
+        else:
+            self.lesson_button.setText('Start lesson')
+            self.prev_step_button.setEnabled(False)
+            self.next_step_button.setEnabled(False)
+            self.lesson_status_label.setText('Lesson mode is off.')
+        self.update_explanation()
+
+    def prev_lesson_step(self) -> None:
+        self.set_lesson_step(self.lesson_step_index - 1)
+
+    def next_lesson_step(self) -> None:
+        self.set_lesson_step(self.lesson_step_index + 1)
+
+    def set_lesson_step(self, index: int) -> None:
+        self.lesson_step_index = max(0, min(index, len(self.lesson_steps) - 1))
+        self.prev_step_button.setEnabled(self.lesson_step_index > 0)
+        self.next_step_button.setEnabled(self.lesson_step_index < len(self.lesson_steps) - 1)
+        step = self.lesson_steps[self.lesson_step_index]
+        self.lesson_status_label.setText(f'Step {self.lesson_step_index + 1} of {len(self.lesson_steps)}: {step["title"]}')
+        self.update_explanation()
+
     def update_explanation(self) -> None:
+        if self.lesson_active:
+            step = self.lesson_steps[self.lesson_step_index]
+            explanation_text = (
+                f'<b>{step["title"]}</b><br>'
+                f'{step["text"]}<br><br>'
+                f'Use the Next and Previous buttons to move through the lesson.'
+            )
+            self.explanation_label.setText(explanation_text)
+            return
+
         dataset_desc = get_dataset_description(self.active_dataset)
         activation_desc = get_activation_description(self.activation_selector.currentText())
         status = 'training' if self.running else 'paused'
