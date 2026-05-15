@@ -266,8 +266,8 @@ class HistoryCanvas(QWidget):
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(rect, 18, 18)
 
-            steps = max(2, len(self.loss_history))
-            x_positions = [rect.x() + i * rect.width() / max(1, steps - 1) for i in range(steps)]
+            max_points = max(len(self.loss_history), len(self.acc_history), len(self.grad_history), 2)
+            x_positions = [rect.x() + i * rect.width() / max(1, max_points - 1) for i in range(max_points)]
 
             def draw_series(data, color, width):
                 if not data:
@@ -279,12 +279,16 @@ class HistoryCanvas(QWidget):
                     for i in range(len(normalized))
                 ]
                 painter.setPen(QPen(color, width))
-                for i in range(len(points) - 1):
-                    painter.drawLine(int(points[i][0]), int(points[i][1]), int(points[i + 1][0]), int(points[i + 1][1]))
+                if len(points) == 1:
+                    painter.setBrush(color)
+                    painter.drawEllipse(int(points[0][0] - 2), int(points[0][1] - 2), 4, 4)
+                else:
+                    for i in range(len(points) - 1):
+                        painter.drawLine(int(points[i][0]), int(points[i][1]), int(points[i + 1][0]), int(points[i + 1][1]))
 
-            draw_series(self.loss_history[-steps:], QColor(94, 149, 255, 220), 2)
-            draw_series(self.acc_history[-steps:], QColor(147, 232, 255, 200), 2)
-            draw_series(self.grad_history[-steps:], QColor(246, 128, 182, 200), 2)
+            draw_series(self.loss_history, QColor(94, 149, 255, 220), 2)
+            draw_series(self.acc_history, QColor(147, 232, 255, 200), 2)
+            draw_series(self.grad_history, QColor(246, 128, 182, 200), 2)
 
             painter.setPen(QPen(QColor(212, 228, 255, 120), 1))
             for grid_line in range(1, 4):
@@ -514,16 +518,6 @@ class NeuralVisualizerWindow(QMainWindow):
         side_layout.addWidget(self.lr_slider)
         side_layout.addWidget(self.train_button)
         side_layout.addWidget(self.reset_button)
-        side_layout.addWidget(QLabel('Guided lesson'))
-        side_layout.addWidget(self.lesson_button)
-        lesson_control_bar = QWidget()
-        lesson_control_layout = QHBoxLayout(lesson_control_bar)
-        lesson_control_layout.setContentsMargins(0, 0, 0, 0)
-        lesson_control_layout.setSpacing(10)
-        lesson_control_layout.addWidget(self.prev_step_button)
-        lesson_control_layout.addWidget(self.next_step_button)
-        side_layout.addWidget(lesson_control_bar)
-        side_layout.addWidget(self.lesson_status_label)
         side_layout.addWidget(QLabel('Guided lesson'))
         side_layout.addWidget(self.lesson_button)
         lesson_control_bar = QWidget()
