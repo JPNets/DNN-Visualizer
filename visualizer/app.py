@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -354,7 +355,8 @@ class NeuralVisualizerWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle('Deep Neural Network Visualizer')
-        self.setMinimumSize(1200, 760)
+        self.setMinimumSize(1220, 780)
+        self.setStyleSheet('background: #0d1626; color: #eef3ff;')
         self.network = NeuralNetwork([2, 6, 2], ['linear', 'tanh', 'softmax'])
         self.active_dataset = 'XOR'
         self.dataset_x, self.dataset_y = create_dataset(self.active_dataset)
@@ -435,6 +437,13 @@ class NeuralVisualizerWindow(QMainWindow):
         self.lesson_status_label.setWordWrap(True)
         self.lesson_status_label.setStyleSheet('color: #b5c5ff;')
 
+        self.tip_title = QLabel('Quick explanation')
+        self.tip_title.setFont(QFont('Segoe UI', 11, QFont.Weight.DemiBold))
+        self.tip_title.setStyleSheet('color: #dbe4ff;')
+        self.tip_label = QLabel('This app helps you understand how a neural network learns from examples. Use the guided lesson to walk through the core steps.')
+        self.tip_label.setWordWrap(True)
+        self.tip_label.setStyleSheet('background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 14px; color: #dfe7ff;')
+
         self.loss_label = QLabel('Loss: 0.000')
         self.accuracy_label = QLabel('Accuracy: 0.0%')
         self.grad_label = QLabel('Grad norm: 0.000')
@@ -507,6 +516,16 @@ class NeuralVisualizerWindow(QMainWindow):
         lesson_control_layout.addWidget(self.next_step_button)
         side_layout.addWidget(lesson_control_bar)
         side_layout.addWidget(self.lesson_status_label)
+        side_layout.addWidget(QLabel('Guided lesson'))
+        side_layout.addWidget(self.lesson_button)
+        lesson_control_bar = QWidget()
+        lesson_control_layout = QHBoxLayout(lesson_control_bar)
+        lesson_control_layout.setContentsMargins(0, 0, 0, 0)
+        lesson_control_layout.setSpacing(10)
+        lesson_control_layout.addWidget(self.prev_step_button)
+        lesson_control_layout.addWidget(self.next_step_button)
+        side_layout.addWidget(lesson_control_bar)
+        side_layout.addWidget(self.lesson_status_label)
         side_layout.addSpacing(18)
         self.loss_label.setStyleSheet('color: #b5c5ff;')
         self.accuracy_label.setStyleSheet('color: #b5c5ff;')
@@ -520,6 +539,9 @@ class NeuralVisualizerWindow(QMainWindow):
         side_layout.addSpacing(12)
         side_layout.addWidget(self.explanation_title)
         side_layout.addWidget(self.explanation_label)
+        side_layout.addSpacing(18)
+        side_layout.addWidget(self.tip_title)
+        side_layout.addWidget(self.tip_label)
         side_layout.addStretch()
 
         content = QWidget()
@@ -537,10 +559,28 @@ class NeuralVisualizerWindow(QMainWindow):
         main_layout = QVBoxLayout(main_area)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(24)
-        main_layout.addWidget(self.canvas, 3)
-        main_layout.addWidget(self.decision_canvas, 2)
-        main_layout.addWidget(self.scatter, 2)
-        main_layout.addWidget(self.history_canvas, 2)
+
+        top_row = QWidget()
+        top_row_layout = QHBoxLayout(top_row)
+        top_row_layout.setContentsMargins(0, 0, 0, 0)
+        top_row_layout.setSpacing(20)
+        top_row_layout.addWidget(self.canvas, 2)
+
+        right_stack = QWidget()
+        right_layout = QVBoxLayout(right_stack)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(20)
+        right_layout.addWidget(self.decision_canvas)
+        right_layout.addWidget(self.scatter)
+        top_row_layout.addWidget(right_stack, 1)
+
+        self.canvas.setMinimumHeight(460)
+        self.decision_canvas.setMinimumHeight(240)
+        self.scatter.setMinimumHeight(240)
+        self.history_canvas.setMinimumHeight(240)
+
+        main_layout.addWidget(top_row, 3)
+        main_layout.addWidget(self.history_canvas, 1)
         layout.addWidget(main_area, 1)
 
         wrapper = QWidget()

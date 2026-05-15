@@ -9,6 +9,8 @@ A cinematic desktop neural network visualizer built with Python and PySide6. Exp
 - Animated network layout with weight and activation shading
 - Real-time loss, accuracy, and gradient norm tracking
 - Decision boundary visualization for classification learning
+- Guided lesson mode with step-by-step AI explanations for beginners
+- Clean, polished interface with clear panels and educational tooltips
 - Educational, modulable neural network core with full forward/backward propagation
 
 ## Setup
