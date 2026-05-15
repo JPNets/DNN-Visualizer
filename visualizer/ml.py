@@ -68,8 +68,45 @@ ACTIVATIONS = {
     'softmax': (softmax, lambda x: np.ones_like(x))
 }
 
-
 DATASET_OPTIONS = ['XOR', 'Moons', 'Circles', 'Spiral', 'Iris']
+
+DATASET_INFO = {
+    'XOR': 'A simple logic pattern where the network learns to separate opposite corners. It shows why neural networks need hidden layers.',
+    'Moons': 'Two half-circle groups that are close together. The network learns a curved boundary to tell them apart.',
+    'Circles': 'One circle inside another. The network learns to separate inside from outside using a nonlinear shape.',
+    'Spiral': 'Points wrapped in two spirals. This dataset is harder and shows how hidden layers create complex decision rules.',
+    'Iris': 'Real plant data with two flower measurements. The network learns to classify three species from those features.'
+}
+
+ACTIVATION_EXPLANATIONS = {
+    'linear': 'Pass signals through without change, useful only at the input/output edges.',
+    'sigmoid': 'Squashes values between 0 and 1, like a soft on/off switch.',
+    'relu': 'Lets positive values through and dampens negatives, making the network easier to train.',
+    'tanh': 'Squashes values between -1 and 1, so neurons can represent positive and negative signals.',
+    'leaky_relu': 'Like ReLU but keeps a small signal for negative values to avoid dead neurons.',
+    'gelu': 'A smooth activation that works well in modern networks by gently transforming inputs.',
+    'softmax': 'Turns raw scores into probabilities across categories so the output can represent choices.'
+}
+
+TERM_DESCRIPTIONS = {
+    'activation': 'An activation function decides how strongly a neuron fires after seeing its input.',
+    'decision boundary': 'A decision boundary separates different classes in the input space.',
+    'gradient norm': 'A single number that shows how big the learning signal is during training.',
+    'training': 'Training means the network tries examples, measures mistakes, and updates its weights.',
+    'network layers': 'Layers are groups of neurons that process information step by step.'
+}
+
+
+def get_dataset_description(name: str) -> str:
+    return DATASET_INFO.get(name, 'A dataset that the network will learn from.')
+
+
+def get_activation_description(name: str) -> str:
+    return ACTIVATION_EXPLANATIONS.get(name, 'A function that changes how each neuron reacts to its input.')
+
+
+def get_term_description(term: str) -> str:
+    return TERM_DESCRIPTIONS.get(term, 'A helpful concept in machine learning.')
 
 
 def normalize(points: np.ndarray) -> np.ndarray:

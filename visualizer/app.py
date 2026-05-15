@@ -21,7 +21,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from visualizer.ml import DATASET_OPTIONS, NeuralNetwork, ACTIVATIONS, create_dataset, pca_projection
+from visualizer.ml import (
+    DATASET_OPTIONS,
+    NeuralNetwork,
+    ACTIVATIONS,
+    create_dataset,
+    pca_projection,
+    get_dataset_description,
+    get_activation_description,
+)
 
 
 class NetworkCanvas(QWidget):
@@ -357,35 +365,54 @@ class NeuralVisualizerWindow(QMainWindow):
         self.dataset_selector.addItems(DATASET_OPTIONS)
         self.dataset_selector.setCurrentText(self.active_dataset)
         self.dataset_selector.currentTextChanged.connect(self.on_dataset_changed)
+        self.dataset_selector.setToolTip('Pick a dataset that the network will learn from. Each shape shows a different challenge.')
 
         self.lr_slider = QSlider(Qt.Horizontal)
         self.lr_slider.setRange(1, 40)
         self.lr_slider.setValue(int(self.learning_rate * 1000))
         self.lr_slider.valueChanged.connect(self.on_lr_changed)
+        self.lr_slider.setToolTip('Learning rate controls how big each change is while the network learns. Too large can jump around, too small can learn slowly.')
 
         self.hidden_neurons_spinner = QSpinBox()
-        self.hidden_neurons_spinner.setRange(2, 16)
+        self.hidden_neurons_spinner.setRange(2, 64)
         self.hidden_neurons_spinner.setValue(6)
         self.hidden_neurons_spinner.valueChanged.connect(self.on_architecture_changed)
+        self.hidden_neurons_spinner.setToolTip('More neurons allow the network to learn more complex patterns, but simpler shapes can learn faster.')
 
         self.activation_selector = QComboBox()
         self.activation_selector.addItems([key for key in ACTIVATIONS.keys() if key != 'linear'])
         self.activation_selector.setCurrentText('tanh')
         self.activation_selector.currentTextChanged.connect(self.on_architecture_changed)
+        self.activation_selector.setToolTip('Choose how each neuron decides to pass a value forward. This affects learning behavior.')
 
         self.train_button = QPushButton('Start training')
         self.train_button.clicked.connect(self.on_toggle_training)
+        self.train_button.setToolTip('Start or pause training. When training, the network learns from the current dataset.')
         self.reset_button = QPushButton('Reset network')
         self.reset_button.clicked.connect(self.on_reset)
+        self.reset_button.setToolTip('Reset the network weights and training history to start fresh.')
 
         self.loss_label = QLabel('Loss: 0.000')
         self.accuracy_label = QLabel('Accuracy: 0.0%')
         self.grad_label = QLabel('Grad norm: 0.000')
 
+        self.explanation_title = QLabel('How this network thinks')
+        self.explanation_title.setFont(QFont('Segoe UI', 12, QFont.Weight.DemiBold))
+        self.explanation_title.setStyleSheet('color: #dce6ff;')
+        self.explanation_label = QLabel()
+        self.explanation_label.setWordWrap(True)
+        self.explanation_label.setStyleSheet('background: rgba(22, 34, 58, 0.92); color: #dce6ff; padding: 14px; border-radius: 16px;')
+        self.explanation_label.setMinimumHeight(160)
+        self.explanation_label.setToolTip('A simple explanation of the current dataset, settings, and training behavior.')
+
         self.canvas = NetworkCanvas(self.network)
+        self.canvas.setToolTip('The neural architecture view shows neurons and weighted connections. Brighter glows mean stronger activations.')
         self.scatter = ScatterCanvas(self.network)
+        self.scatter.setToolTip('The dataset view shows the input points and their class labels.')
         self.decision_canvas = DecisionCanvas(self.network)
+        self.decision_canvas.setToolTip('The decision boundary view shows how the network separates the different classes in the input space.')
         self.history_canvas = HistoryCanvas()
+        self.history_canvas.setToolTip('The history chart tracks loss, accuracy, and gradient strength as training progresses.')
 
         self.build_ui()
 
@@ -431,9 +458,15 @@ class NeuralVisualizerWindow(QMainWindow):
         self.loss_label.setStyleSheet('color: #b5c5ff;')
         self.accuracy_label.setStyleSheet('color: #b5c5ff;')
         self.grad_label.setStyleSheet('color: #b5c5ff;')
+        self.loss_label.setToolTip('Loss shows how wrong the network is overall. Lower is better.')
+        self.accuracy_label.setToolTip('Accuracy shows what percent of examples the network currently predicts correctly.')
+        self.grad_label.setToolTip('Gradient norm measures how strong the learning signal is while the network updates.')
         side_layout.addWidget(self.loss_label)
         side_layout.addWidget(self.accuracy_label)
         side_layout.addWidget(self.grad_label)
+        side_layout.addSpacing(12)
+        side_layout.addWidget(self.explanation_title)
+        side_layout.addWidget(self.explanation_label)
         side_layout.addStretch()
 
         content = QWidget()
@@ -506,6 +539,7 @@ class NeuralVisualizerWindow(QMainWindow):
             self.running = True
             self.timer.start()
             self.train_button.setText('Pause training')
+        self.update_metrics()
 
     def on_reset(self) -> None:
         self.network.reset()
@@ -542,3 +576,18 @@ class NeuralVisualizerWindow(QMainWindow):
         self.loss_label.setText(f'Loss: {self.network.loss:.4f}')
         self.accuracy_label.setText(f'Accuracy: {self.network.accuracy:.1f}%')
         self.grad_label.setText(f'Grad norm: {self.network.gradient_norm:.3f}')
+        self.update_explanation()
+
+    def update_explanation(self) -> None:
+        dataset_desc = get_dataset_description(self.active_dataset)
+        activation_desc = get_activation_description(self.activation_selector.currentText())
+        status = 'training' if self.running else 'paused'
+        explanation_text = (
+            f'<b>Dataset:</b> {self.active_dataset} — {dataset_desc}<br>'
+            f'<b>Hidden neurons:</b> {self.hidden_neurons_spinner.value()} — more neurons let the network learn more detailed patterns.<br>'
+            f'<b>Activation:</b> {self.activation_selector.currentText()} — {activation_desc}<br>'
+            f'<b>Learning rate:</b> {self.learning_rate:.3f} — how big each change is when the network learns.<br><br>'
+            f'<b>Training status:</b> {status}. Loss measures overall error, accuracy shows how many examples are correct, and gradient norm shows how strong the weight updates are.<br><br>'
+            f'<b>Visual guide:</b> the network view shows neurons firing, the decision boundary shows how the model splits the input space, and the history chart shows how the network improves over time.'
+        )
+        self.explanation_label.setText(explanation_text)
