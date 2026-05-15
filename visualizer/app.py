@@ -405,9 +405,15 @@ class NeuralVisualizerWindow(QMainWindow):
 
         self.hidden_neurons_spinner = QSpinBox()
         self.hidden_neurons_spinner.setRange(2, 64)
-        self.hidden_neurons_spinner.setValue(6)
+        self.hidden_neurons_spinner.setValue(12)
         self.hidden_neurons_spinner.valueChanged.connect(self.on_architecture_changed)
         self.hidden_neurons_spinner.setToolTip('More neurons allow the network to learn more complex patterns, but simpler shapes can learn faster.')
+
+        self.hidden_neurons_spinner_2 = QSpinBox()
+        self.hidden_neurons_spinner_2.setRange(2, 64)
+        self.hidden_neurons_spinner_2.setValue(8)
+        self.hidden_neurons_spinner_2.valueChanged.connect(self.on_architecture_changed)
+        self.hidden_neurons_spinner_2.setToolTip('This second hidden layer adds another level of pattern recognition for more complex decisions.')
 
         self.activation_selector = QComboBox()
         self.activation_selector.addItems([key for key in ACTIVATIONS.keys() if key != 'linear'])
@@ -498,8 +504,10 @@ class NeuralVisualizerWindow(QMainWindow):
         side_layout.addWidget(header)
         side_layout.addWidget(QLabel('Dataset'))
         side_layout.addWidget(self.dataset_selector)
-        side_layout.addWidget(QLabel('Hidden neuron count'))
+        side_layout.addWidget(QLabel('Hidden layer 1 size'))
         side_layout.addWidget(self.hidden_neurons_spinner)
+        side_layout.addWidget(QLabel('Hidden layer 2 size'))
+        side_layout.addWidget(self.hidden_neurons_spinner_2)
         side_layout.addWidget(QLabel('Activation function'))
         side_layout.addWidget(self.activation_selector)
         side_layout.addWidget(QLabel('Learning rate'))
@@ -618,7 +626,15 @@ class NeuralVisualizerWindow(QMainWindow):
         self.update_metrics()
 
     def on_architecture_changed(self, value: int) -> None:
-        self.network = NeuralNetwork([2, value, self.dataset_y.shape[1]], ['linear', self.activation_selector.currentText(), 'softmax'])
+        self.network = NeuralNetwork(
+            [
+                2,
+                self.hidden_neurons_spinner.value(),
+                self.hidden_neurons_spinner_2.value(),
+                self.dataset_y.shape[1],
+            ],
+            ['linear', self.activation_selector.currentText(), self.activation_selector.currentText(), 'softmax'],
+        )
         self.canvas.network = self.network
         self.scatter.network = self.network
         self.on_reset()
@@ -649,7 +665,15 @@ class NeuralVisualizerWindow(QMainWindow):
         self.dataset_x, self.dataset_y = create_dataset(self.active_dataset)
         if self.dataset_y.ndim == 1:
             self.dataset_y = np.eye(np.max(self.dataset_y) + 1)[self.dataset_y]
-        self.network = NeuralNetwork([2, self.hidden_neurons_spinner.value(), self.dataset_y.shape[1]], ['linear', self.activation_selector.currentText(), 'softmax'])
+        self.network = NeuralNetwork(
+            [
+                2,
+                self.hidden_neurons_spinner.value(),
+                self.hidden_neurons_spinner_2.value(),
+                self.dataset_y.shape[1],
+            ],
+            ['linear', self.activation_selector.currentText(), self.activation_selector.currentText(), 'softmax'],
+        )
         self.canvas.network = self.network
         self.scatter.network = self.network
         self.decision_canvas.network = self.network
