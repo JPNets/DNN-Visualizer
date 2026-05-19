@@ -4,7 +4,7 @@ import math
 from typing import Optional
 
 import numpy as np
-from PySide6.QtCore import QMargins, QTimer, Qt
+from PySide6.QtCore import QMargins, QTimer, Qt, QPropertyAnimation, QEasingCurve, QPoint
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -20,6 +20,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
     QWidget,
+    QToolTip,
+    QDialog,
+    QCheckBox,
+    QTextEdit,
 )
 
 from visualizer.ml import (
@@ -241,6 +245,172 @@ class DecisionCanvas(QWidget):
             painter.end()
 
 
+class MathDialog(QDialog):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle('Explain the Math')
+        self.setMinimumSize(540, 420)
+        layout = QVBoxLayout(self)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet('background: #091424; color: #e7f1ff; border-radius: 8px; padding:10px;')
+        txt.setHtml(
+            '<h2>How the network computes a prediction</h2>'
+            '<p>Each neuron computes a weighted sum plus a bias, then an activation function:</p>'
+            '<p><b>z = w \u00b7 x + b</b></p>'
+            '<p><b>a = activation(z)</b></p>'
+            '<p>For the output layer with softmax, we turn raw scores into probabilities:</p>'
+            '<p><b>softmax(s)_i = exp(s_i) / sum_j exp(s_j)</b></p>'
+            '<h3>Plain language</h3>'
+            '<ul>'
+            '<li><b>Weights</b> decide how important each input is.</li>'
+            '<li><b>Bias</b> shifts the activation threshold.</li>'
+            '<li><b>Activation</b> controls whether the neuron "fires".</li>'
+            '</ul>'
+        )
+        layout.addWidget(txt)
+        close = QPushButton('Close')
+        close.clicked.connect(self.accept)
+        layout.addWidget(close)
+
+
+class CompareDialog(QDialog):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle('Compare Models')
+        self.setMinimumSize(960, 680)
+        self.setStyleSheet('background: #071224; color: #eaf3ff;')
+
+        # state
+        self.left_net = NeuralNetwork([2, 6, 2], ['linear', 'tanh', 'softmax'])
+        self.right_net = NeuralNetwork([2, 10, 2], ['linear', 'tanh', 'softmax'])
+        self.left_x, self.left_y = create_dataset('XOR')
+        self.right_x, self.right_y = create_dataset('CIRCLE')
+
+        layout = QVBoxLayout(self)
+
+        top = QHBoxLayout()
+
+        # Left pane
+        left_panel = QVBoxLayout()
+        self.left_decision = DecisionCanvas(self.left_net)
+        self.left_history = HistoryCanvas()
+        self.left_decision.set_data(self.left_x, self.left_y)
+        left_panel.addWidget(self.left_decision, 3)
+        left_panel.addWidget(self.left_history, 1)
+
+        # Right pane
+        right_panel = QVBoxLayout()
+        self.right_decision = DecisionCanvas(self.right_net)
+        self.right_history = HistoryCanvas()
+        self.right_decision.set_data(self.right_x, self.right_y)
+        right_panel.addWidget(self.right_decision, 3)
+        right_panel.addWidget(self.right_history, 1)
+
+        # Wrap panes in subtle frames for polish
+        left_frame = QWidget()
+        left_frame.setLayout(left_panel)
+        left_frame.setStyleSheet('background: rgba(8,14,28,0.35); border-radius: 12px; padding: 10px;')
+
+        right_frame = QWidget()
+        right_frame.setLayout(right_panel)
+        right_frame.setStyleSheet('background: rgba(8,14,28,0.35); border-radius: 12px; padding: 10px;')
+
+        top.addWidget(left_frame)
+        top.addWidget(right_frame)
+
+        layout.addLayout(top)
+
+        # Control bar
+        ctrl = QWidget()
+        ctrl_layout = QHBoxLayout(ctrl)
+        ctrl_layout.setContentsMargins(6, 6, 6, 6)
+        ctrl_layout.setSpacing(12)
+        self.start_btn = QPushButton('Start')
+        self.start_btn.clicked.connect(self._toggle_training)
+        self.start_btn.setProperty('primary', True)
+        self.reset_btn = QPushButton('Reset')
+        self.reset_btn.clicked.connect(self._reset_models)
+        ctrl_layout.addWidget(self.start_btn)
+        ctrl_layout.addWidget(self.reset_btn)
+
+        ctrl_layout.addStretch()
+        self.sync_checkbox = QCheckBox('Train in sync')
+        self.sync_checkbox.setChecked(True)
+        ctrl_layout.addWidget(self.sync_checkbox)
+
+        layout.addWidget(ctrl)
+
+        footer = QLabel('Tip: adjust network sizes on the main UI and use this dialog to visually compare decision boundaries and training dynamics.')
+        footer.setStyleSheet('color: #cfe6ff;')
+        layout.addWidget(footer)
+
+        # timer for training both models
+        self._timer = QTimer(self)
+        self._timer.setInterval(120)
+        self._timer.timeout.connect(self._train_step)
+
+        # initial history
+        self._reset_models()
+
+    def _toggle_training(self) -> None:
+        if self._timer.isActive():
+            self._timer.stop()
+            self.start_btn.setText('Start')
+        else:
+            self._timer.start()
+            self.start_btn.setText('Pause')
+
+    def _reset_models(self) -> None:
+        # reinitialize networks and histories
+        self.left_net.reset()
+        self.right_net.reset()
+        self.left_history.set_history([], [], [])
+        self.right_history.set_history([], [], [])
+        self.left_decision.update()
+        self.right_decision.update()
+
+    def _train_step(self) -> None:
+        # train one batch on each model; if sync, use same lr
+        lr = 0.06
+        try:
+            self.left_net.train_batch(self.left_x, self.left_y, lr)
+            if self.sync_checkbox.isChecked():
+                self.right_net.train_batch(self.right_x, self.right_y, lr)
+            else:
+                self.right_net.train_batch(self.right_x, self.right_y, lr * 0.9)
+        except Exception:
+            pass
+        self.left_decision.update()
+        self.right_decision.update()
+        self.left_history.set_history(self.left_net.loss_history, self.left_net.accuracy_history, self.left_net.gradient_history)
+        self.right_history.set_history(self.right_net.loss_history, self.right_net.accuracy_history, self.right_net.gradient_history)
+
+
+class SmoothScrollArea(QScrollArea):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._anim: QPropertyAnimation | None = None
+
+    def wheelEvent(self, event) -> None:
+        # Smooth-scroll by animating the vertical scrollbar
+        delta = event.angleDelta().y()
+        if delta == 0:
+            return
+        step = -int(delta / 2)
+        bar = self.verticalScrollBar()
+        start = bar.value()
+        end = max(bar.minimum(), min(bar.maximum(), start + step))
+        if self._anim is not None and self._anim.state() == QPropertyAnimation.Running:
+            self._anim.stop()
+        self._anim = QPropertyAnimation(bar, b'value', self)
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.setDuration(240)
+        self._anim.setEasingCurve(QEasingCurve.InOutCubic)
+        self._anim.start()
+
+
 class HistoryCanvas(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -298,8 +468,52 @@ class HistoryCanvas(QWidget):
             painter.setPen(QPen(QColor(212, 228, 255), 1))
             painter.setFont(QFont('Segoe UI', 12, QFont.Weight.DemiBold))
             painter.drawText(rect.x() + 16, rect.y() + 28, 'Training history curves')
+
+            # Draw legend
+            legend_x = rect.right() - 170
+            legend_y = rect.y() + 8
+            painter.setFont(QFont('Segoe UI', 9))
+            painter.setPen(QPen(QColor(200, 220, 255), 200))
+            painter.drawText(legend_x + 20, legend_y + 12, 'Loss')
+            painter.setPen(QPen(QColor(147, 232, 255), 1))
+            painter.setBrush(QColor(94, 149, 255, 200))
+            painter.drawRect(legend_x, legend_y + 4, 12, 8)
+            painter.setPen(QPen(QColor(200, 220, 255), 200))
+            painter.drawText(legend_x + 20, legend_y + 30, 'Accuracy')
+            painter.setPen(QPen(QColor(147, 232, 255), 1))
+            painter.setBrush(QColor(147, 232, 255, 200))
+            painter.drawRect(legend_x, legend_y + 22, 12, 8)
+            painter.drawText(legend_x + 20, legend_y + 48, 'Grad norm')
+            painter.setPen(QPen(QColor(246, 128, 182), 1))
+            painter.setBrush(QColor(246, 128, 182, 200))
+            painter.drawRect(legend_x, legend_y + 40, 12, 8)
+            # Y-axis labels
+            painter.setPen(QPen(QColor(190, 210, 235), 160))
+            painter.setFont(QFont('Segoe UI', 9))
+            painter.drawText(rect.x() + 8, rect.y() + 14, '1.0')
+            painter.drawText(rect.x() + 8, rect.bottom() - 6, '0.0')
         finally:
             painter.end()
+
+    def mouseMoveEvent(self, event) -> None:
+        # Show tooltip with nearest values
+        if not (self.loss_history or self.acc_history or self.grad_history):
+            return
+        rect = self.rect().marginsRemoved(QMargins(16, 16, 16, 16))
+        max_points = max(len(self.loss_history), len(self.acc_history), len(self.grad_history), 1)
+        x_positions = [rect.x() + i * rect.width() / max(1, max_points - 1) for i in range(max_points)]
+        # find closest x
+        mx = event.position().x()
+        idx = min(range(len(x_positions)), key=lambda i: abs(x_positions[i] - mx))
+        parts = []
+        if idx < len(self.loss_history):
+            parts.append(f'Loss: {self.loss_history[idx]:.4f}')
+        if idx < len(self.acc_history):
+            parts.append(f'Acc: {self.acc_history[idx]:.1f}%')
+        if idx < len(self.grad_history):
+            parts.append(f'Grad: {self.grad_history[idx]:.3f}')
+        if parts:
+            QToolTip.showText(self.mapToGlobal(QPoint(int(mx), int(event.position().y()))), '\n'.join(parts), self)
 
 
 class ScatterCanvas(QWidget):
@@ -432,6 +646,14 @@ class NeuralVisualizerWindow(QMainWindow):
         self.reset_button.clicked.connect(self.on_reset)
         self.reset_button.setToolTip('Reset the network weights and training history to start fresh.')
 
+        self.math_button = QPushButton('Explain the Math')
+        self.math_button.clicked.connect(self.show_math_dialog)
+        self.math_button.setToolTip('Open a concise explanation of the math behind the network.')
+
+        self.compare_button = QPushButton('Compare models')
+        self.compare_button.clicked.connect(self.open_compare_dialog)
+        self.compare_button.setToolTip('Open a side-by-side comparison of two networks.')
+
         self.lesson_button = QPushButton('Start lesson')
         self.lesson_button.clicked.connect(self.toggle_lesson_mode)
         self.lesson_button.setToolTip('Start a guided lesson that explains the neural network step by step.')
@@ -496,6 +718,9 @@ class NeuralVisualizerWindow(QMainWindow):
             'QPushButton { min-height: 42px; }'
             'QPushButton:hover { background: rgba(63, 108, 255, 0.95); }'
             'QPushButton:pressed { background: rgba(44, 82, 212, 0.98); }'
+            'QPushButton[primary="true"] { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #4b9bff, stop:1 #2f6fe6); color: #ffffff; border: none; font-weight: 600; }'
+            'QPushButton[primary="true"]:hover { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5eaaff, stop:1 #3c7ff0); }'
+            'QCheckBox { color: #cfe6ff; }'
             'QSlider::groove:horizontal { height: 10px; background: rgba(108, 137, 205, 0.25); border-radius: 5px; }'
             'QSlider::handle:horizontal { width: 16px; background: #5da1ff; border-radius: 8px; margin: -3px 0; }'
         )
@@ -518,6 +743,8 @@ class NeuralVisualizerWindow(QMainWindow):
         side_layout.addWidget(self.lr_slider)
         side_layout.addWidget(self.train_button)
         side_layout.addWidget(self.reset_button)
+        side_layout.addWidget(self.math_button)
+        side_layout.addWidget(self.compare_button)
         side_layout.addWidget(QLabel('Guided lesson'))
         side_layout.addWidget(self.lesson_button)
         lesson_control_bar = QWidget()
@@ -599,7 +826,7 @@ class NeuralVisualizerWindow(QMainWindow):
         wrapper_layout.addWidget(subtitle)
         wrapper_layout.addWidget(content)
 
-        scroll_area = QScrollArea()
+        scroll_area = SmoothScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(wrapper)
         scroll_area.setFrameShape(QScrollArea.NoFrame)
@@ -642,6 +869,7 @@ class NeuralVisualizerWindow(QMainWindow):
             self.running = True
             self.timer.start()
             self.train_button.setText('Pause training')
+        self.train_button.setProperty('primary', True)
         self.update_metrics()
 
     def on_reset(self) -> None:
@@ -741,3 +969,11 @@ class NeuralVisualizerWindow(QMainWindow):
             f'<b>Visual guide:</b> the network view shows neurons firing, the decision boundary shows how the model splits the input space, and the history chart shows how the network improves over time.'
         )
         self.explanation_label.setText(explanation_text)
+
+    def show_math_dialog(self) -> None:
+        dlg = MathDialog(self)
+        dlg.exec()
+
+    def open_compare_dialog(self) -> None:
+        dlg = CompareDialog(self)
+        dlg.exec()
